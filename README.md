@@ -1,13 +1,26 @@
-# miniAES_impossible_4-tuple
-A novel key-recovery method named "impossible 4-tuple cryptanalysis".
+# A Novel Key-Recovery Method: Impossible 4-Tuple Cryptanalysis
 
-This repository applies the impossible 4-tuple cryptanalysis, to the 5-round miniAES algorithm.
-It is possible to recover the key of it with the following two variants:
-	1. Typical impossible 4-tuple cryptanalysis
-	2. Fast impossible 4-tuple cryptanalysis
+This repository implements the *impossible 4-tuple cryptanalysis* technique on the 5-round miniAES algorithm. Using this method, it is possible to recover the secret key via two variants:
 
-To recover the key of the 5-round miniAES algorithm, please follow the instructions below:
-1. Add the package files in the directory where the Python compiler has been installed, for example, "C:\Users\myAccount\AppData\Local\Programs\Python\Python310".
-2. Enter the secret key of the miniAES algorithm in the text file "miniAES_Key.txt". Since the algorithm uses a 16-bit master key, the entered key in "miniAES_Key.txt" shall contain four hexadecimal characters (without using any capital letters), for example, "f345".
-3. To recover the master key via the "typical version", open the "cmd", and then write the command "python.exe miniAES_Typical_Imp_4tuple.py".
-4. Also, it is possible to recover the key with the "fast version" by running the command "python.exe miniAES_Fast_Imp_4tuple.py".
+1. Typical impossible 4-tuple cryptanalysis  
+2. Fast impossible 4-tuple cryptanalysis  
+
+---
+
+## Instructions for Key Recovery
+
+To recover the master key of the 5-round miniAES algorithm, follow the steps below:
+
+1. Place the package files in the directory where Python is installed  
+   (e.g., `C:\Users\myAccount\AppData\Local\Programs\Python\Python310`).
+
+2. Enter the secret key of the miniAES algorithm in the file `miniAES_Key.txt`.  
+   Since the algorithm uses a 16-bit master key, the key must consist of **four lowercase hexadecimal characters** (e.g., `f345`).
+
+3. To recover the key using the *typical version*, open the command prompt and run:
+   ```bash
+   python miniAES_Typical_Imp_4tuple.py
+
+4. Also, to recover the key via the *fast version*, execute the following command: :
+   ```bash
+   python miniAES_Fast_Imp_4tuple.py

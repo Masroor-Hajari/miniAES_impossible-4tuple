@@ -10,320 +10,342 @@
     #2. Data Collection
     #3. 4-tuple Extraction
 
-import random   
-from GFexp2by4 import Xor, int2nib, nib2int
-from miniAES_Functions import InvSBox, oneMixColumn, AddRoundKey
-from miniAES_Oracle import Generate, ctxReader, str2num
-
-##############################DataCollector###############################
-def DataCollector(StrVec,PtxStr,KeyStr,CtxStr,Round,Phase):
-    MAT = ["0","1","2","3","4","5","6","7","8","9","a","b","c","d","e","f"]
-    f = open(PtxStr,"w")
-    f.close()
-    for i in range(0,15):
-        for j in range(0,16):
-            with open(PtxStr,"a") as f:
-                f.write(MAT[i] + MAT[j]+",")
-    for i in range(0,15):
-        with open(PtxStr,"a") as f:
-            f.write(MAT[15]+MAT[i]+",")
-    with open(PtxStr,"a") as f:
-        f.write(MAT[15] + MAT[15])
-    f.close()
-    Generate(PtxStr,KeyStr,CtxStr,StrVec,Round,Phase)
-##########################################################################  
+import numpy as np  
+import GFexp2to4 as gf
+import miniAES_Functions as func
+from miniAES_Oracle import CtxGen
+from random import randint
+from math import floor
 
 ###############################Precompute#################################
-def Precompute(DataStr,N):
-    # N is the number of required words per nibble (0<N<17)
-    MAT = ["0","1","2","3","4","5","6","7","8","9","a","b","c","d","e","f"]
-    zeroNib = [0,0,0,0]
-    Y = [zeroNib,zeroNib]
-    Z = [zeroNib,zeroNib]
-    X = zeroNib
-    f = open(DataStr,"w")
-    f.close()
-    for i in range(0,N):
-        for j in range(0,N):
-            Y[0] = int2nib(i)
-            Y[1] = int2nib(j)
-            Z = oneMixColumn(Y)
-            for l in range(0,2):
-                X = InvSBox(Z[l])
-                I = nib2int(X)
-                if l == 0 or (i == N - 1 and j == N - 1):
-                    with open(DataStr,"a") as f:
-                        f.write(MAT[I])
-                else: 
-                    with open(DataStr,"a") as f:
-                        f.write(MAT[I] + ",")
-    f.close()
-##########################################################################
-
-###############################DataReader#################################
-def dataReader(Name):
-    f = open(Name)
-    Str = f.read()
-    f.close()
-    N = len(Str)
-    M = (N + 1) // 3
-    ctr = 0
-    Arr = [[0] * 2 for i in range(M)]
-    for i in range(0,N):
-        if i % 3 == 2:
-            ctr += 1
-            continue
+def Precompute(Address: str, parameter: int) -> None:
+    try:
+        if type(Address) != str:
+            raise TypeError("The first input must be a valid address.")
+        elif type(parameter) != int or parameter < 0 or parameter > 15:
+            raise ValueError("The second input must be a valid integer between 0 and 15.")
         else:
-            Arr[ctr][i % 3] = str2num(Str[i])
-    return Arr
+            MAT = "0123456789abcdef"
+            Address += "\\miniAES_Precomp.txt"
+            X = np.array([0, 0], dtype = np.uint8)
+            Y = X.copy()
+            Z = X.copy()
+            with open(Address,"w") as f:
+                for i in range(0, parameter):
+                    Y[0] = np.uint8(i)
+                    for j in range(0, parameter):
+                        Y[1] = np.uint8(j)
+                        Z = func.SingleMixColumn(Y)
+                        X[0] = func.InvSBox(Z[0])
+                        X[1] = func.InvSBox(Z[1])
+                        f.write("0x" + MAT[X[0]] + MAT[X[1]] + "\n")
+                f.close()
+
+    except TypeError as e1:
+        print("Error: Invalid input.", e1)
+
+    except ValueError as e2:
+        print("Error: Invalid input.", e2)
 ##########################################################################
 
-if __name__ == "__main__":
-#########################1st Phase Initialization#########################
-    StrVecCore = [random.randint(0,15),random.randint(0,15)]
-    StrVecMask = [0,random.randint(1,5),random.randint(6,10),random.randint(11,15)]
-    StrVec = [[0,0],[0,0],[0,0],[0,0]]
-    StrVec[0] = StrVecCore
-    for i in range (0,4):
-        for j in range(0,2):
-            StrVec[i][0] = (StrVecCore[0] + StrVecMask[i]) % 16
-            StrVec[i][1] = StrVecCore[1] 
-    DataStr = "miniAES_Precomp.txt"
-    PtxStr = "miniAES_Ptx.txt"
-    KeyStr = "miniAES_Key.txt"
-    CtxStr = "miniAES_Ctx.txt"
-    Round = 5
-    Phase = 1
-    zeroNib = [0,0,0,0]
-    Y = [[zeroNib,zeroNib],[zeroNib,zeroNib],[zeroNib,zeroNib],[zeroNib,zeroNib]]
-    Z = [[zeroNib,zeroNib],[zeroNib,zeroNib],[zeroNib,zeroNib],[zeroNib,zeroNib]]
-    X = [[zeroNib,zeroNib],[zeroNib,zeroNib],[zeroNib,zeroNib],[zeroNib,zeroNib]]
-    P = [[zeroNib,zeroNib],[zeroNib,zeroNib],[zeroNib,zeroNib],[zeroNib,zeroNib]]
-    RecKey = [[zeroNib,zeroNib],[zeroNib,zeroNib]]
-    impFlag = False
-    recFlag = False
-    C0 = [[[0],[0]],[[0],[0]]]
-    C1 = [[[0],[0]],[[0],[0]]]
-    C2 = [[[0],[0]],[[0],[0]]]
-    C3 = [[[0],[0]],[[0],[0]]]
+##############################DataCollector###############################
+def DataCollector(Address: str) -> list:
+    try:
+        if type(Address) != str:
+            raise TypeError("Input must be a valid address.")
+        else:
+            randomList = []
+            element1 = randint(0, 15)
+            element2 = randint(0, 15)
+            element3 = randint(0, 15)
+            element4 = randint(0, 15)
+            element5 = randint(0, 15)
+            element6 = randint(0, 15)
+            element7 = randint(0, 15)
+            element8 = randint(0, 15)
+            randomList.append(element1)
+            randomList.append(element2)
+            randomList.append(element3)
+            randomList.append(element4)
+            randomList.append(element5)
+            randomList.append(element6)
+            randomList.append(element7)
+            randomList.append(element8)
+            MAT = "0123456789abcdef"
+            Address += "\\miniAES_Ptx.txt"
+            with open(Address,"w") as f:
+                for i in range(0, 16):
+                    for j in range(0, 16):
+                        f.write("0x" + MAT[i] + MAT[element1] + MAT[element2] + MAT[j] + "\n")
+                for i in range(0, 16):
+                    for j in range(0, 16):
+                        f.write("0x" + MAT[i] + MAT[element3] + MAT[element4] + MAT[j] + "\n")
+                for i in range(0, 16):
+                    for j in range(0, 16):
+                        f.write("0x" + MAT[element5] + MAT[i] + MAT[j] + MAT[element6] + "\n")
+                for i in range(0, 16):
+                    for j in range(0, 16):
+                        f.write("0x" + MAT[element7] + MAT[i] + MAT[j] + MAT[element8] + "\n")
+                f.close()
+            return randomList
+
+    except TypeError as e:
+        print("Error: Invalid input.", e)
+########################################################################## 
+
+################################ctxReader#################################
+def ctxReader(Address: str) -> list:
+    try:
+        if type(Address) != str:
+            raise TypeError("Input must be a valid address.")
+        else:
+            ctxList = []
+            Address += "\\miniAES_Ctx.txt"
+            with open(Address, 'r') as f:
+                ctxStr = f.read()
+                f.close()
+            L = len(ctxStr)
+            try:
+                if (L != 7168 and L != 7169) or (L == 7169 and ctxStr[7168] != "\n"):
+                    raise ValueError("Invalid ciphertext list. Rewrite it, then run the script again.")
+                else:
+                    for i in range(0, 1024):
+                        ctxList.append(np.array([[gf.Str2Num(ctxStr[7 * i + 2]), gf.Str2Num(ctxStr[7 * i + 4])],
+                                                 [gf.Str2Num(ctxStr[7 * i + 3]), gf.Str2Num(ctxStr[7 * i + 5])]], dtype = np.uint8))
+                    return ctxList
+
+            except ValueError as e1:
+                print("Invalid input.", e1)
+
+    except TypeError as e2:
+        print("Invalid input.", e2)
 ##########################################################################
 
-#########################1st Phase Precomputation#########################
-    Precompute(DataStr,6)
-##########################################################################
-   
-########################1st Phase Data Collection#########################
-    DataCollector(StrVec[0],PtxStr,KeyStr,CtxStr,Round,Phase)
-    CtxList0 = ctxReader(CtxStr)
-    DataCollector(StrVec[1],PtxStr,KeyStr,CtxStr,Round,Phase)
-    CtxList1 = ctxReader(CtxStr)
-    DataCollector(StrVec[2],PtxStr,KeyStr,CtxStr,Round,Phase)
-    CtxList2 = ctxReader(CtxStr)
-    DataCollector(StrVec[3],PtxStr,KeyStr,CtxStr,Round,Phase)
-    CtxList3 = ctxReader(CtxStr)
-    CtxBook = [CtxList0, CtxList1, CtxList2, CtxList3]
-    Words = dataReader(DataStr)
-    for k0 in range(0,16):
-        nibK0 = int2nib(k0)
-        for k1 in range(0,16):
-            nibK1 = int2nib(k1)
-            Index = 16 * k0 + k1
-            print("Phase1: ", (10000 * Index // 256) / 100, "% completed.")
+##############################PreCompReader###############################
+def PreCompReader(Address: str, parameter: int) -> list:
+    try:
+        if type(Address) != str or type(parameter) != int or parameter < 1 or parameter > 15:
+            raise TypeError("The first input must be a valid address and the second input must be an integer between 1 and 15.")
+        else:
+            dataList = []
+            Address += "\\miniAES_Precomp.txt"
+            with open(Address, 'r') as f:
+                dataStr = f.read()
+                f.close()
+            L = len(dataStr)
+            N = (parameter ** 2) * 5
+            try:
+                if (L != N and L != N + 1) or (L == N + 1 and dataStr[N] != "\n"):
+                    raise ValueError("Invalid precomputation list. Rewrite it, then run the script again.")
+                else:
+                    N = parameter ** 2
+                    for i in range(0, N):
+                        dataList.append(np.array([gf.Str2Num(dataStr[5 * i + 2]), gf.Str2Num(dataStr[5 * i + 3])], dtype = np.uint8))
+                    return dataList
+
+            except ValueError as e1:
+                print("Invalid input.", e1)
+
+    except TypeError as e2:
+        print("Invalid input.", e2)
 ##########################################################################
 
-#######################1st Phase 4-tuple extraction#######################
-            for i in range(0,6):
-                for j in range(0,6):
-                    IndexQuad0 = 6 * i + j
-                    X[0][0] = int2nib(Words[IndexQuad0][0])
-                    X[0][1] = int2nib(Words[IndexQuad0][1])
-                    for l in range(i + 1,6):
-                        IndexQuad2 = 6 * l + j
-                        X[2][0] = int2nib(Words[IndexQuad2][0])
-                        X[2][1] = int2nib(Words[IndexQuad2][1])
-                        for m in range(j + 1,6):
-                            IndexQuad1 = 6 * l + m
-                            IndexQuad3 = 6 * i + m
-                            X[1][0] = int2nib(Words[IndexQuad1][0])
-                            X[1][1] = int2nib(Words[IndexQuad1][1])
-                            X[3][0] = int2nib(Words[IndexQuad3][0])
-                            X[3][1] = int2nib(Words[IndexQuad3][1])
-                            P[0][0] = Xor(X[0][0],nibK0)
-                            P[1][0] = Xor(X[1][0],nibK0)
-                            P[2][0] = Xor(X[2][0],nibK0)
-                            P[3][0] = Xor(X[3][0],nibK0)
-                            P[0][1] = Xor(X[0][1],nibK1)
-                            P[1][1] = Xor(X[1][1],nibK1)
-                            P[2][1] = Xor(X[2][1],nibK1)
-                            P[3][1] = Xor(X[3][1],nibK1)
-                            for St in range(0,4):
-                                Num1 = nib2int(P[0][0])
-                                Num2 = nib2int(P[0][1])
-                                CtxList = CtxBook[St]
-                                Index2 = 16 * Num1 + Num2
-                                C0 = CtxList[Index2]
-                                Num1 = nib2int(P[1][0])
-                                Num2 = nib2int(P[1][1])
-                                Index2 = 16 * Num1 + Num2
-                                C1 = CtxList[Index2]
-                                Num1 = nib2int(P[2][0])
-                                Num2 = nib2int(P[2][1])
-                                Index2 = 16 * Num1 + Num2
-                                C2 = CtxList[Index2]
-                                Num1 = nib2int(P[3][0])
-                                Num2 = nib2int(P[3][1])
-                                Index2 = 16 * Num1 + Num2
-                                C3 = CtxList[Index2]
-                                if (C0[0][0] == C1[0][0] and C0[1][1] == C1[1][1] and (C2[0][0] != C3[0][0] or C2[1][1] != C3[1][1])) or (C2[0][0] == C3[0][0] and C2[1][1] == C3[1][1] and (C0[0][0] != C1[0][0] or C0[1][1] != C1[1][1])) or (C0[0][1] == C1[0][1] and C0[1][0] == C1[1][0] and (C2[0][1] != C3[0][1] or C2[1][0] != C3[1][0])) or (C2[0][1] == C3[0][1] and C2[1][0] == C3[1][0] and (C0[0][1] != C1[0][1] or C0[1][0] != C1[1][0])):
-                                    impFlag = True
-                                    break
-                            if impFlag == True:
-                                break
-                        if impFlag == True:
-                            break
-                    if impFlag == True:
-                        break
-                if impFlag == True:
+#################################Sieving##################################
+def Sieving(preCompList: list, ctxList: list, phase: int) -> list:
+    try:
+        if type(preCompList) != list or type(ctxList) != list or type(phase) != int and phase < 1 or phase > 2:
+            raise TypeError("The first and second inputs must be lists and the last input must be either 1 or 2.")
+        else:
+            L1 = len(preCompList)
+            L2 = len(ctxList)
+            metric = 0
+            sqrVec = [1, 4, 9, 16, 25, 36, 49, 64, 81, 100, 121, 144, 169, 196, 225]
+            for i in range(0, 15):
+                if sqrVec[i] - L1 == 0:
+                    metric = i + 1
                     break
-            if impFlag == False:
-                RecKey[0][0] = int2nib(k0)
-                RecKey[1][1] = int2nib(k1)
-                recFlag = True
-                print("Phase1: ", 100.0, "% completed.")
-                break
-            else:
-                impFlag = False
-        if recFlag == True:
-            break
-##########################################################################
-
-#########################2nd Phase Initialization#########################
-    StrVecCore = [random.randint(0,15),random.randint(0,15)]
-    StrVecMask = [0,random.randint(1,5),random.randint(6,10),random.randint(11,15)]
-    StrVec[0] = StrVecCore
-    for i in range (1,4):
-        for j in range(0,2):
-            StrVec[i][0] = (StrVecCore[0] + StrVecMask[i]) % 2
-            StrVec[i][1] = StrVecCore[1]
-    Round = 5
-    Phase = 2
-    impFlag = False
-    recFlag = False
-##########################################################################
-
-#########################2nd Phase Precomputation#########################
-    #It is possible that precomputed words is also utilized for the second phase. This step can be skipped.
-##########################################################################
-
-########################2nd Phase Data Collection#########################
-    DataCollector(StrVec[0],PtxStr,KeyStr,CtxStr,Round,Phase)
-    CtxList0 = ctxReader(CtxStr)
-    DataCollector(StrVec[1],PtxStr,KeyStr,CtxStr,Round,Phase)
-    CtxList1 = ctxReader(CtxStr)
-    DataCollector(StrVec[2],PtxStr,KeyStr,CtxStr,Round,Phase)
-    CtxList2 = ctxReader(CtxStr)
-    DataCollector(StrVec[3],PtxStr,KeyStr,CtxStr,Round,Phase)
-    CtxList3 = ctxReader(CtxStr)
-    CtxBook = [CtxList0, CtxList1, CtxList2, CtxList3]
-    for k0 in range(0,16):
-        nibK0 = int2nib(k0)
-        for k1 in range(0,16):
-            nibK1 = int2nib(k1)
-            Index = 16 * k0 + k1
-            print("Phase2: ", (10000 * Index // 256) / 100, "% completed.")
-##########################################################################
-
-#######################2nd Phase 4-tuple extraction#######################
-            for i in range(0,6):
-                for j in range(0,6):
-                    IndexQuad0 = 6 * i + j
-                    X[0][0] = int2nib(Words[IndexQuad0][0])
-                    X[0][1] = int2nib(Words[IndexQuad0][1])
-                    for l in range(i + 1,6):
-                        IndexQuad2 = 6 * l + j
-                        X[2][0] = int2nib(Words[IndexQuad2][0])
-                        X[2][1] = int2nib(Words[IndexQuad2][1])
-                        for m in range(j + 1,6):
-                            IndexQuad1 = 6 * l + m
-                            IndexQuad3 = 6 * i + m
-                            X[1][0] = int2nib(Words[IndexQuad1][0])
-                            X[1][1] = int2nib(Words[IndexQuad1][1])
-                            X[3][0] = int2nib(Words[IndexQuad3][0])
-                            X[3][1] = int2nib(Words[IndexQuad3][1])
-                            P[0][0] = Xor(X[0][1],nibK0)
-                            P[1][0] = Xor(X[1][1],nibK0)
-                            P[2][0] = Xor(X[2][1],nibK0)
-                            P[3][0] = Xor(X[3][1],nibK0)
-                            P[0][1] = Xor(X[0][0],nibK1)
-                            P[1][1] = Xor(X[1][0],nibK1)
-                            P[2][1] = Xor(X[2][0],nibK1)
-                            P[3][1] = Xor(X[3][0],nibK1)
-                            for St in range(0,4):
-                                Num1 = nib2int(P[0][0])
-                                Num2 = nib2int(P[0][1])
-                                CtxList = CtxBook[St]
-                                Index2 = 16 * Num1 + Num2
-                                C0 = CtxList[Index2]
-                                Num1 = nib2int(P[1][0])
-                                Num2 = nib2int(P[1][1])
-                                Index2 = 16 * Num1 + Num2
-                                C1 = CtxList[Index2]
-                                Num1 = nib2int(P[2][0])
-                                Num2 = nib2int(P[2][1])
-                                Index2 = 16 * Num1 + Num2
-                                C2 = CtxList[Index2]
-                                Num1 = nib2int(P[3][0])
-                                Num2 = nib2int(P[3][1])
-                                Index2 = 16 * Num1 + Num2
-                                C3 = CtxList[Index2]
-                                if (C0[0][0] == C1[0][0] and C0[1][1] == C1[1][1] and (C2[0][0] != C3[0][0] or C2[1][1] != C3[1][1])) or (C2[0][0] == C3[0][0] and C2[1][1] == C3[1][1] and (C0[0][0] != C1[0][0] or C0[1][1] != C1[1][1])) or (C0[0][1] == C1[0][1] and C0[1][0] == C1[1][0] and (C2[0][1] != C3[0][1] or C2[1][0] != C3[1][0])) or (C2[0][1] == C3[0][1] and C2[1][0] == C3[1][0] and (C0[0][1] != C1[0][1] or C0[1][0] != C1[1][0])):
-                                    impFlag = True
+            try:
+                if L2 != 1024 or metric == 0:
+                    raise ValueError("Either precomputation or ciphertext lists are not valid.")
+                else:
+                    keyCandidate = []
+                    P0 = np.array([0, 0], dtype = np.uint8)
+                    P1 = P0.copy()
+                    P2 = P0.copy()
+                    P3 = P0.copy()
+                    C0 = np.array([[0, 0],
+                                   [0, 0]], dtype = np.uint8)
+                    if phase == 1:
+                        offset = 0
+                        index0 = 0
+                        index1 = 1
+                    else:
+                        offset = 512
+                        index0 = 1
+                        index1 = 0
+                    for k0 in range (0, 16):
+                        for k1 in range (0, 16):
+                            discardFlag = False
+                            for i in range(0, metric):
+                                for j in range(i + 1, metric):
+                                    for l in range(0, metric):
+                                        for m in range(l + 1, metric):
+                                            numX0 = metric * i + l
+                                            numX1 = metric * j + m
+                                            numX2 = metric * j + l
+                                            numX3 = metric * i + m
+                                            X0 = preCompList[numX0].copy()
+                                            X1 = preCompList[numX1].copy()
+                                            X2 = preCompList[numX2].copy()
+                                            X3 = preCompList[numX3].copy()
+                                            P0[index0] = gf.NibXor(X0[index0], np.uint8(k0))
+                                            P1[index0] = gf.NibXor(X1[index0], np.uint8(k0))
+                                            P2[index0] = gf.NibXor(X2[index0], np.uint8(k0))
+                                            P3[index0] = gf.NibXor(X3[index0], np.uint8(k0))
+                                            P0[index1] = gf.NibXor(X0[index1], np.uint8(k1))
+                                            P1[index1] = gf.NibXor(X1[index1], np.uint8(k1))
+                                            P2[index1] = gf.NibXor(X2[index1], np.uint8(k1))
+                                            P3[index1] = gf.NibXor(X3[index1], np.uint8(k1))
+                                            num0 = int(16 * P0[0] + P0[1])
+                                            num1 = int(16 * P1[0] + P1[1])
+                                            num2 = int(16 * P2[0] + P2[1])
+                                            num3 = int(16 * P3[0] + P3[1])
+                                            for n in range(0, 2):
+                                                C0 = ctxList[num0 + offset + 256 * n]
+                                                C1 = ctxList[num1 + offset + 256 * n]
+                                                C2 = ctxList[num2 + offset + 256 * n]
+                                                C3 = ctxList[num3 + offset + 256 * n]
+                                                delC01 = func.AddRoundKey(C0, C1)
+                                                delC23 = func.AddRoundKey(C2, C3)
+                                                if (delC01[0][0] == 0 and delC01[1][1] == 0 and (delC23[0][0] != 0 or delC23[1][1] != 0)):
+                                                    discardFlag = True
+                                                    break
+                                                elif (delC23[0][0] == 0 and delC23[1][1] == 0 and (delC01[0][0] != 0 or delC01[1][1] != 0)):
+                                                    discardFlag = True
+                                                    break
+                                                elif (delC01[0][1] == 0 and delC01[1][0] == 0 and (delC23[0][1] != 0 or delC23[1][0] != 0)):
+                                                    discardFlag = True
+                                                    break
+                                                elif (delC23[0][1] == 0 and delC23[1][0] == 0 and (delC01[0][1] != 0 or delC01[1][0] != 0)):
+                                                    discardFlag = True
+                                                    break
+                                                else:
+                                                    continue
+                                            if discardFlag == True:
+                                                break
+                                        if discardFlag == True:
+                                            break
+                                    if discardFlag == True:
+                                        break
+                                if discardFlag == True:
                                     break
-                            if impFlag == True:
-                                break
-                        if impFlag == True:
-                            break
-                    if impFlag == True:
-                        break
-                if impFlag == True:
-                    break
-            if impFlag == False:
-                RecKey[1][0] = int2nib(k0)
-                RecKey[0][1] = int2nib(k1)
-                recFlag = True
-                print("Phase1: ", 100.0, "% completed.")
-                break
-            else:
-                impFlag = False
-        if recFlag == True:
-            break
+                            if discardFlag == False:
+                                keyCandidate.append([k0, k1])
+                            else:
+                                p = 100 * offset / 1024 + floor(50 * (k1 + 16 * k0) / 256)
+                                print(f"{p}% of fast impossible 4-tuple cryptanalsis has been completed.")
+                                continue
+                    return keyCandidate
+
+            except ValueError as e1:
+                print("Error: Invalid input.", e1)
+
+    except TypeError as e2:
+        print("Error: Invalid input.", e2)
 ##########################################################################
 
 ###############################Key Recovery###############################
-print("Recovered master key:")
-print("\tBlock representation: ", [RecKey])
-print("\tStream representation: ", end="")
-for i in range(0,2):
-    for j in range(0,2):
-        for k in range(0,4):
-            if k==3 and j==1 and i==1:
-                print(RecKey[j][i][k])
-            else:
-                print(RecKey[j][i][k], end="")
-print("\tHexadecimal representation: ", end = "")
-for i in range(0,2):
-    for j in range(0,2):
-        n = nib2int(RecKey[j][i])
-        if n < 10:
-            Str = chr(48 + n)
-            if j==1 and i==1:
-                print(Str)
-            else:
-                print(Str, end = "")
+def KeyRecovery(phase1Keys: list, phase2Keys: list, randomList: list, ctxList: list) -> None:
+    try:
+        if type(phase1Keys) != list or type(phase2Keys) != list or type(randomList) != list or type(ctxList) != list:
+            raise TypeError("All inputs must be lists.")
+        elif len(randomList) != 8 or len(ctxList) != 2:
+            raise ValueError("The third input must be a list of length 8 and the fourth input must be a list of length 2.")
+        elif len(phase1Keys) == 0 or len(phase2Keys) == 0:
+            raise ValueError("The first and second inputs must be non-empty lists.")
         else:
-            Str = chr(87 + n)
-            if j==1 and i==1:
-                print(Str)
+            if len(phase1Keys) == 1 and len(phase2Keys) == 1:
+                RecKey = np.array([[phase1Keys[0][0], phase2Keys[0][0]],
+                                   [phase2Keys[0][1], phase1Keys[0][1]]], dtype = np.uint8)
+                recFlag = True
             else:
-                print(Str, end = "")
+                P1 = np.array([[0, randomList[1]],
+                               [randomList[0], 0]], dtype = np.uint8)
+                P2 = np.array([[randomList[6], 15],
+                               [15, randomList[7]]], dtype = np.uint8)
+                C1 = ctxList[0]
+                C2 = ctxList[1]
+                L1 = len(phase1Keys)
+                L2 = len(phase2Keys)
+                recFlag = False
+                for i in range(0, L1):
+                    for j in range(0, L2):
+                        testKey = np.array([[phase1Keys[i][0], phase2Keys[j][0]],
+                                            [phase2Keys[j][1], phase1Keys[i][1]]], dtype = np.uint8)
+                        cHat1 = func.AES_Enc(P1, testKey, 5)
+                        mat = func.AddRoundKey(cHat1, C1)
+                        if np.sum(mat) == 0:
+                            cHat2 = func.AES_Enc(P2, testKey, 5)
+                            mat = func.AddRoundKey(cHat2, C2)
+                            if np.sum(mat) == 0:
+                                RecKey = testKey.copy()
+                                recFlag = True
+                                break
+                    if recFlag == True:
+                        break
+            if recFlag == False:
+                print("Error: Key has not been recovered! Please check the inputs.")
+            else:
+                print("Recovered master key:")
+                print("\tBlock representation: ", [[int(RecKey[0][0]), int(RecKey[0][1])], [int(RecKey[1][0]), int(RecKey[1][1])]])
+                print("\tStream representation: ", end = "")
+                for i in range(0, 2):
+                    for j in range(0, 2):
+                        keyStream = gf.Int2Nib(RecKey[j][i])
+                        for k in range(0, 4):
+                            print(keyStream[k], end = "")
+                print(" ")
+                print("\tHexadecimal representation: ", end = "")
+                MAT = "0123456789abcdef"
+                key = "0x"
+                for i in range(0, 2):
+                    for j in range(0, 2):
+                        key += MAT[RecKey[j][i]]
+                print(key)
+
+    except TypeError as e:
+        print("Error: Invalid input.", e)
 ##########################################################################
+
+#############################AddressModifier##############################
+def AddressModifiy(Address: str) -> str:
+    try:
+        if type(Address) != str:
+            raise TypeError("Invalid address.")
+        else:
+            Address.replace("\\", "\\\\")
+            modifyAddress = Address
+            return modifyAddress
+
+    except TypeError as e:
+        print("Error: Invalid input.", e)
+##########################################################################
+
+################################MainDriver################################
+def main():
+    Address = input("Please enter the target address to start the fast impossible 4-tuple cryptanalysis of miniAES. \nAddress: ")
+    Address = AddressModifiy(Address)
+    Precompute(Address, 6)
+    preCompList = PreCompReader(Address, 6)
+    randomList = DataCollector(Address)
+    CtxGen(Address)
+    ctxList = ctxReader(Address)
+    keySet1 = Sieving(preCompList, ctxList, 1)
+    keySet2 = Sieving(preCompList, ctxList, 2)
+    ctxTestVec = []
+    ctxTestVec.append(ctxList[0].copy())
+    ctxTestVec.append(ctxList[1023].copy())
+    KeyRecovery(keySet1, keySet2, randomList, ctxTestVec)
+
+if __name__ == "__main__":
+    main()
